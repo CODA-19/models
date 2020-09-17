@@ -23,7 +23,7 @@ Modèle multi-input (time series = laboratoires, signes vitaux + 2-dimensional i
 
 Chaque CNN émet un output de taille (32 x batch_size), et les outputs des 2 CNN sont ensuite fusionnés, avant de passer dans un dense layer pour la prédiction finale.
 
-![alt text](model.png "Model structure")
+![Model structure](img/model.png)
 
 ### Evaluation
 
@@ -33,4 +33,4 @@ Pour chacun des 5 folds (80/20), la portion de 20% est conservée comme test set
 
 ### Results
 
-![alt text](results.png "Results")
+![Results](img/results.png)
