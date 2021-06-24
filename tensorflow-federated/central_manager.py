@@ -1,14 +1,31 @@
 import collections
-
+import grpc
 import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
+from grpc import _channel
+
+from logging_interceptor import LoggingInterceptor
+
+import json
+import sys
+import logging
+
+root = logging.getLogger()
+#root.setLevel(logging.DEBUG)
+
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+root.addHandler(handler)
+
 
 # 
 #  Configure training task, preprocess data, plan task (/prepare)
 # 
 
-NUM_CLIENTS = 10
+NUM_CLIENTS = 2
 BATCH_SIZE = 20
 
 OPTIMIZER = 'SGD'
@@ -39,6 +56,23 @@ client_ids = np.random.choice(emnist_train.client_ids, size=NUM_CLIENTS, replace
 federated_train_data = [preprocess(emnist_train.create_tf_dataset_for_client(x), BATCH_SIZE)
   for x in client_ids
 ]
+
+# Setup the remote executors
+ip_address = '127.0.0.1'
+port = 8080
+
+channels = []
+for i in range(NUM_CLIENTS):
+  print('Setting up channel %i' % i)
+  real_channel = grpc.insecure_channel('{}:{}'.format(ip_address, port+i+1))
+  intercept_channel = grpc.intercept_channel(real_channel, LoggingInterceptor(root, '1.0.0'))
+  channels.append(intercept_channel)
+
+factory = tff.framework.remote_executor_factory(channels)
+context = tff.framework.ExecutionContext(factory)
+tff.framework.set_default_context(context)
+
+#tff.backends.native.set_remote_execution_context(channels)
 
 # 
 #  Keras helper functions
@@ -179,6 +213,7 @@ federated_algorithm = tff.templates.IterativeProcess(
     next_fn=next_fn
 )
 
+print('Initializing algorithm... ')
 server_state = federated_algorithm.initialize()
 evaluate(MODEL_JSON_CONFIG, server_state)
 
