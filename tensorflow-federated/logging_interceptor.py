@@ -14,21 +14,10 @@ from tensorflow_federated.proto.v0 import executor_pb2_grpc
 class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
                          UnaryStreamClientInterceptor):
 
-    _FULL_REQUEST_LOG_LINE = ('Request\n-------\nMethod: {}\nHost: {}\n'
-                              'Headers: {}\nRequest: {}\n\nResponse\n-------\n'
-                              'Headers: {}\nResponse: {}\n')
-    _FULL_FAULT_LOG_LINE = ('Request\n-------\nMethod: {}\nHost: {}\n'
-                            'Headers: {}\nRequest: {}\n\nResponse\n-------\n'
-                            'Headers: {}\nFault: {}\n')
-    _SUMMARY_LOG_LINE = ('Request made: Host: {}, '
-                         'Method: {}, RequestId: {}, IsFault: {}, '
-                         'FaultMessage: {}')
-
     def __init__(self, logger):
         super().__init__('1.0.0')
         self.logger = logger
 
-    # Getters
     def _get_trailing_metadata(self, response):
         try:
             trailing_metadata = response.trailing_metadata()
@@ -64,7 +53,6 @@ class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
             except AttributeError:
                 return None
 
-    # Actions
     def _log_successful_request(self, method, metadata_json,
                                 request_id, request, trailing_metadata_json,
                                 response):
@@ -91,13 +79,6 @@ class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
         return
 
     def _log_request(self, client_call_details, request, response):
-        """Handles logging all requests.
-
-        Args:
-            client_call_details: An instance of grpc.ClientCallDetails.
-            request: An instance of a request proto message.
-            response: A grpc.Call/grpc.Future instance.
-        """
         method = self._get_call_method(client_call_details)
         initial_metadata = self._get_initial_metadata(client_call_details)
         initial_metadata_json = self.parse_metadata_to_json(initial_metadata)
@@ -114,61 +95,52 @@ class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
                 method, initial_metadata_json, request_id, request,
                 trailing_metadata_json, response)
 
+    def _pass_through(self, request_method, request):
+        
+      request_class = ''
+
+      if request_method == 'ClearExecutor':
+        request_class = 'executor_pb2.ClearExecutorRequest'
+      elif request_method == 'SetCardinalities':
+        request_class = 'executor_pb2.SetCardinalitiesRequest'
+      elif request_method == 'CreateValue':
+        request_class = 'executor_pb2.CreateValueRequest'
+      elif request_method == 'CreateStruct':
+        request_class = 'executor_pb2.CreateStructRequest'
+      elif request_method == 'CreateCall':
+        request_class = 'executor_pb2.CreateCallRequest'
+      elif request_method == 'Compute':
+        request_class = 'executor_pb2.ComputeRequest'
+      elif request_method == 'Dispose':
+        request_class = 'executor_pb2.DisposeRequest'
+      else:
+        print('Unrecognized request method: %s' % (request_path))
+        exit()
+      
+      message_serialized = MessageToJson(request)
+
+      request_serialized = {
+          'request_class': request_class,
+          'message_serialized': message_serialized
+      }
+    
+      request_serialized_json = json.dumps(request_serialized)
+      request_parsed = json.loads(request_serialized_json)
+
+      request_class_obj = eval(request_parsed['request_class'])
+      request_message_obj = request_parsed['message_serialized']
+
+      request_deserialized = Parse(request_message_obj, request_class_obj())
+
+      return request_deserialized
+
     def intercept_unary_unary(self, continuation, client_call_details, request):
-        """Intercepts and logs API interactions.
-
-        Overrides abstract method defined in grpc.UnaryUnaryClientInterceptor.
-
-        Args:
-            continuation: a function to continue the request process.
-            client_call_details: a grpc._interceptor._ClientCallDetails
-                instance containing request metadata.
-            request: a SearchGoogleAdsRequest or SearchGoogleAdsStreamRequest
-                message class instance.
-
-        Returns:
-            A grpc.Call/grpc.Future instance representing a service response.
-        """
 
         request_path = client_call_details.method
         request_method = request_path.split("/")[-1]
 
-        request_class = ''
-
-        if request_method == 'ClearExecutor':
-          request_class = 'executor_pb2.ClearExecutorRequest'
-        elif request_method == 'SetCardinalities':
-          request_class = 'executor_pb2.SetCardinalitiesRequest'
-        elif request_method == 'CreateValue':
-          request_class = 'executor_pb2.CreateValueRequest'
-        elif request_method == 'CreateStruct':
-          request_class = 'executor_pb2.CreateStructRequest'
-        elif request_method == 'CreateCall':
-          request_class = 'executor_pb2.CreateCallRequest'
-        elif request_method == 'Compute':
-          request_class = 'executor_pb2.ComputeRequest'
-        elif request_method == 'Dispose':
-          request_class = 'executor_pb2.DisposeRequest'
-        else:
-          print('Unrecognized request method: %s' % (request_path))
-          exit()
-        
-        message_serialized =  MessageToJson(request)
-
-        request_serialized = {
-            'request_class': request_class,
-            'message_serialized': message_serialized
-        }
-    
-        request_serialized_json = json.dumps(request_serialized)
-        request_parsed = json.loads(request_serialized_json)
-
-        request_class_obj = eval(request_parsed['request_class'])
-        request_message_obj = request_parsed['message_serialized']
-
-        request_deserialized = Parse(request_message_obj, request_class_obj())
-   
-        response = continuation(client_call_details, request_deserialized)
+        request = _pass_through(request_method, request)
+        response = continuation(client_call_details, request)
         
         if self.logger.isEnabledFor(logging.WARNING):
             self._log_request(client_call_details, request, response)
@@ -178,24 +150,10 @@ class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
     def intercept_unary_stream(self, continuation, client_call_details,
                                request):
 
-        """Intercepts and logs API interactions for Unary-Stream requests.
-
-        Overrides abstract method defined in grpc.UnaryStreamClientInterceptor.
-
-        Args:
-            continuation: a function to continue the request process.
-            client_call_details: a grpc._interceptor._ClientCallDetails
-                instance containing request metadata.
-            request: a SearchGoogleAdsRequest or SearchGoogleAdsStreamRequest
-                message class instance.
-
-        Returns:
-            A grpc.Call/grpc.Future instance representing a service response.
-        """
         def on_rpc_complete(response_future):
             if self.logger.isEnabledFor(logging.WARNING):
                 self._log_request(client_call_details, request, response_future)
-        print(client_call_details)
+        
         response = continuation(client_call_details, request)
 
         response.add_done_callback(on_rpc_complete)
