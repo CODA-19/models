@@ -1,23 +1,11 @@
 from concurrent import futures
-import random
-import asyncio
 import grpc
 import json
 
 from tensorflow_federated.proto.v0 import executor_pb2
 from tensorflow_federated.proto.v0 import executor_pb2_grpc
-from tensorflow_federated.python.common_libs import py_typecheck
-from tensorflow_federated.python.core.api import computations
-from tensorflow_federated.python.core.impl.executors import eager_tf_executor
-from tensorflow_federated.python.core.impl.executors import executor_base
-from tensorflow_federated.python.core.impl.executors import executor_factory
-from tensorflow_federated.python.core.impl.executors import executor_serialization
 from tensorflow_federated.python.core.impl.executors import executor_service
-from tensorflow_federated.python.core.impl.executors import executor_stacks
 from tensorflow_federated.python.core.impl.executors.executor_stacks import remote_executor_factory
-from tensorflow_federated.python.core.impl.executors import executor_value_base
-from tensorflow_federated.python.core.impl.executors import remote_executor
-from tensorflow_federated.python.core.impl.types import placements
 
 from google.protobuf.json_format import MessageToJson
 from google.protobuf.json_format import Parse
@@ -114,9 +102,6 @@ class ProxyService(executor_service.ExecutorService):
 
 def serve(ip_address, port):
     
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
     mirror_port = 8080 - (port - 8080)
     channel = grpc.insecure_channel('{}:{}'.format(ip_address, mirror_port))
 
