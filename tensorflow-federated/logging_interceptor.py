@@ -1,7 +1,6 @@
 from grpc import UnaryUnaryClientInterceptor, UnaryStreamClientInterceptor
 import jsonpickle
 from google.protobuf.json_format import MessageToJson
-from google.protobuf.json_format import MessageToDict
 from google.protobuf.json_format import Parse
 
 from interceptor import Interceptor
@@ -25,15 +24,11 @@ class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
                          'Method: {}, RequestId: {}, IsFault: {}, '
                          'FaultMessage: {}')
 
-    # Initializer for the LoggingInterceptor.
-    # Args: logger: An instance of logging.Logger.
     def __init__(self, logger):
         super().__init__('1.0.0')
         self.logger = logger
 
-    # Retrieves trailing metadata from a response object.
-    # Args: response: A grpc.Call/grpc.Future instance.
-    # Returns: A tuple of metadatum representing response header key value pairs.
+    # Getters
     def _get_trailing_metadata(self, response):
         try:
             trailing_metadata = response.trailing_metadata()
@@ -47,45 +42,20 @@ class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
             return self.get_trailing_metadata_from_interceptor_exception(
                 response.exception())
 
-    # Retrieves the initial metadata from client_call_details.
-    # Args: client_call_details: An instance of grpc.ClientCallDetails.
-    # Returns: A tuple of metadatum representing request header key value pairs.
     def _get_initial_metadata(self, client_call_details):
         return getattr(client_call_details, 'metadata', tuple())
 
-    # Retrieves the call method from client_call_details.
-    # Args: client_call_details: An instance of grpc.ClientCallDetails.
-    # Returns: A str with the call method or None if it isn't present.
     def _get_call_method(self, client_call_details):
         return getattr(client_call_details, 'method', None)
     
-    # Parses response exception object to str for logging.
-    # Args: exception: A grpc.Call instance.
-    # Returns: A str representing a exception from the API.
     def _parse_exception_to_str(self, exception):
         try:
-            # if exception.failure isn't present then it's likely this is a
-            # transport error with a .debug_error_string method and the
-            # returned JSON string will need to be formatted.
             return self.format_json_object(json.loads(
                 exception.debug_error_string()))
         except (AttributeError, ValueError):
-            # if both attempts to retrieve serializable error data fail
-            # then simply return an empty JSON string
             return '{}'
 
     def _get_fault_message(self, exception):
-        """Retrieves a fault/error message from an exception object.
-
-        Returns None if no error message can be found on the exception.
-
-        Returns:
-            A str with an error message or None if one cannot be found.
-
-        Args:
-            response: A grpc.Call/grpc.Future instance.
-            exception: A grpc.Call instance.
-        """
         try:
             return exception.failure.errors[0].message
         except AttributeError:
@@ -94,6 +64,7 @@ class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
             except AttributeError:
                 return None
 
+    # Actions
     def _log_successful_request(self, method, metadata_json,
                                 request_id, request, trailing_metadata_json,
                                 response):
