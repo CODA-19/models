@@ -14,30 +14,18 @@ from tensorflow_federated.python.core.impl.executors import executor_factory
 from tensorflow_federated.python.core.impl.executors import executor_serialization
 from tensorflow_federated.python.core.impl.executors import executor_service
 from tensorflow_federated.python.core.impl.executors import executor_stacks
+from tensorflow_federated.python.core.impl.executors.executor_stacks import remote_executor_factory
 from tensorflow_federated.python.core.impl.executors import executor_value_base
 from tensorflow_federated.python.core.impl.executors import remote_executor
 from tensorflow_federated.python.core.impl.types import placements
 
 class ProxyService(executor_service.ExecutorService):
 
-    def set_channel(self, channel):
-      self.channel = channel
-      
-    async def SetCardinalities(
-      self,
-      request: executor_pb2.SetCardinalitiesRequest,
-      context: grpc.ServicerContext,
+    def SetCardinalities(
+      self, *args, **kwargs
     ) -> executor_pb2.SetCardinalitiesResponse:
       print('SetCardinalities')
-      try:
-        cardinality = request.cardinalities[0].cardinality
-        self._executor = remote_executor.RemoteExecutor(self.channel)
-        self._executor.set_cardinalities({placements.CLIENTS: cardinality})
-
-        return executor_pb2.SetCardinalitiesResponse()
-      except (ValueError, TypeError) as err:
-        _set_invalid_arg_err(context, err)
-        return executor_pb2.SetCardinalitiesResponse()
+      return super().SetCardinalities(*args, **kwargs)
       
     def ClearExecutor(
         self, *args, **kwargs
@@ -78,10 +66,8 @@ def serve(ip_address, port):
     mirror_port = 8080 - (port - 8080)
     channel = grpc.insecure_channel('{}:{}'.format(ip_address, mirror_port))
 
-    ex_factory = executor_stacks.ResourceManagingExecutorFactory(
-        lambda _: eager_tf_executor.EagerTFExecutor())
+    ex_factory = remote_executor_factory(channels=[channel])
     service = ProxyService(ex_factory=ex_factory)
-    service.set_channel(channel)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     executor_pb2_grpc.add_ExecutorServicer_to_server(service, server)
     
