@@ -11,14 +11,17 @@ import json
 import sys
 import logging
 
-root = logging.getLogger()
-#root.setLevel(logging.DEBUG)
+# 
+#  Configure logger to print to STDOUT
+# 
 
+logger = logging.getLogger()
+#root.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
-root.addHandler(handler)
+logger.addHandler(handler)
 
 
 # 
@@ -65,7 +68,7 @@ channels = []
 for i in range(NUM_CLIENTS):
   print('Setting up channel %i' % i)
   real_channel = grpc.insecure_channel('{}:{}'.format(ip_address, port+i+1))
-  intercept_channel = grpc.intercept_channel(real_channel, LoggingInterceptor(root, '1.0.0'))
+  intercept_channel = grpc.intercept_channel(real_channel, LoggingInterceptor(logger))
   channels.append(intercept_channel)
 
 factory = tff.framework.remote_executor_factory(channels)
