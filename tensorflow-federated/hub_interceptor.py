@@ -11,12 +11,39 @@ import importlib
 from tensorflow_federated.proto.v0 import executor_pb2
 from tensorflow_federated.proto.v0 import executor_pb2_grpc
 
-class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
+class HubInterceptor(Interceptor, UnaryUnaryClientInterceptor,
                          UnaryStreamClientInterceptor):
 
     def __init__(self, logger):
         super().__init__('1.0.0')
         self.logger = logger
+
+    def intercept_unary_unary(self, continuation, client_call_details, request):
+
+        request_path = client_call_details.method
+        request_method = request_path.split("/")[-1]
+
+        request = self._pass_through(request_method, request)
+        response = continuation(client_call_details, request)
+        
+        if self.logger.isEnabledFor(logging.WARNING):
+            self._log_request(client_call_details, request, response)
+
+        return response
+
+    def intercept_unary_stream(self, continuation, client_call_details,
+                               request):
+
+        def on_rpc_complete(response_future):
+            if self.logger.isEnabledFor(logging.WARNING):
+                self._log_request(client_call_details, request, response_future)
+        
+        request = self._pass_through(request_method, request)
+        response = continuation(client_call_details, request)
+
+        response.add_done_callback(on_rpc_complete)
+
+        return response
 
     def _get_trailing_metadata(self, response):
         try:
@@ -133,29 +160,3 @@ class LoggingInterceptor(Interceptor, UnaryUnaryClientInterceptor,
       request_deserialized = Parse(request_message_obj, request_class_obj())
 
       return request_deserialized
-
-    def intercept_unary_unary(self, continuation, client_call_details, request):
-
-        request_path = client_call_details.method
-        request_method = request_path.split("/")[-1]
-
-        request = _pass_through(request_method, request)
-        response = continuation(client_call_details, request)
-        
-        if self.logger.isEnabledFor(logging.WARNING):
-            self._log_request(client_call_details, request, response)
-
-        return response
-
-    def intercept_unary_stream(self, continuation, client_call_details,
-                               request):
-
-        def on_rpc_complete(response_future):
-            if self.logger.isEnabledFor(logging.WARNING):
-                self._log_request(client_call_details, request, response_future)
-        
-        response = continuation(client_call_details, request)
-
-        response.add_done_callback(on_rpc_complete)
-
-        return response

@@ -100,10 +100,9 @@ class ProxyService(executor_service.ExecutorService):
       return super().Compute(self._pass_through('Compute', request), context)
 
 
-def serve(ip_address, port):
+def serve(ip_address, port, proxied_port):
     
-    mirror_port = 8080 - (port - 8080)
-    channel = grpc.insecure_channel('{}:{}'.format(ip_address, mirror_port))
+    channel = grpc.insecure_channel('{}:{}'.format(ip_address, proxied_port))
 
     ex_factory = remote_executor_factory(channels=[channel])
     service = ProxyService(ex_factory=ex_factory)
@@ -115,4 +114,4 @@ def serve(ip_address, port):
     server.wait_for_termination()
 
 if __name__ == "__main__":
-    serve('127.0.0.1', 8081)
+    serve('127.0.0.1', 8083, 8084)

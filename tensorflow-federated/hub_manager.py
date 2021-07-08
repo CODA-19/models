@@ -5,7 +5,7 @@ import tensorflow as tf
 import tensorflow_federated as tff
 from grpc import _channel
 
-from logging_interceptor import LoggingInterceptor
+from hub_interceptor import HubInterceptor
 
 import json
 import sys
@@ -68,7 +68,7 @@ channels = []
 for i in range(NUM_CLIENTS):
   print('Setting up channel %i' % i)
   real_channel = grpc.insecure_channel('{}:{}'.format(ip_address, port+i+1))
-  intercept_channel = grpc.intercept_channel(real_channel, LoggingInterceptor(logger))
+  intercept_channel = grpc.intercept_channel(real_channel, HubInterceptor(logger))
   channels.append(intercept_channel)
 
 factory = tff.framework.remote_executor_factory(channels)
