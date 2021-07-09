@@ -11,23 +11,15 @@ import json
 import sys
 import logging
 
-# 
 #  Configure logger to print to STDOUT
-# 
-
 logger = logging.getLogger()
-#root.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-
-# 
 #  Configure training task, preprocess data, plan task (/prepare)
-# 
-
 NUM_CLIENTS = 2
 BATCH_SIZE = 20
 
