@@ -1,6 +1,7 @@
 from concurrent import futures
 import grpc
 import json
+import sys
 
 from tensorflow_federated.proto.v0 import executor_pb2
 from tensorflow_federated.proto.v0 import executor_pb2_grpc
@@ -114,4 +115,21 @@ def serve(ip_address, port, proxied_port):
     server.wait_for_termination()
 
 if __name__ == "__main__":
-    serve('127.0.0.1', 8083, 8084)
+
+  if len(sys.argv) != 2:
+    print('Incorrect number of arguments. Invoke as: site_executor.py <port number>')
+    exit()
+
+  try:
+    port = int(sys.argv[1])
+  except:
+    print('Incorrect port number supplied; could not be interpreted as integer.')
+    exit()
+
+  if port < 7000 or port > 9000:
+    print('Incorrect port range. Port should be between 7000 and 9000.')
+    exit()
+
+  print('Setting up site executor.')
+
+  serve('127.0.0.1', 8081, 8082)
