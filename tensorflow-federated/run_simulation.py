@@ -80,7 +80,7 @@ if __name__ == "__main__":
 		    executors.append(executor_proc)
 		    print('Started executor process.')
 		
-		    print('\nStarting interceptor process for site %i on port %i...' % (i, executor_port))
+		    print('\nStarting interceptor process for site %i on port %i...' % (i, interceptor_port))
 		    interceptor_proc = run_interceptor(interceptor_port)
 		    interceptors.append(interceptor_proc)
 		    print('Started interceptor process.')

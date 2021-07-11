@@ -77,6 +77,10 @@ tff.framework.set_default_context(context)
 def create_keras_model(model_json_config):
   return tf.keras.models.model_from_json(model_json_config)
 
+def create_optimizer_fn():
+  adam = tf.keras.optimizers.SGD(0.002)
+  return adam
+
 # Run the Keras model.
 def model_fn(model_json_config, loss_function, metric_function):
   keras_model = create_keras_model(model_json_config)
@@ -87,17 +91,43 @@ def model_fn(model_json_config, loss_function, metric_function):
       loss=getattr(tf.keras.losses, loss_function)(),
       metrics=[getattr(tf.keras.metrics, metric_function)()])
 
-# Evaluate the Keras model.
-def evaluate(model_json_config, server_state):
+def create_tf_model_fn():
+  model = model_fn(MODEL_JSON_CONFIG, LOSS_FUNCTION, METRIC_FUNCTION)
+  return model
 
-  keras_model = create_keras_model(model_json_config)
-  keras_model.compile(
-      loss=tf.keras.losses.SparseCategoricalCrossentropy(),
-      metrics=[tf.keras.metrics.SparseCategoricalAccuracy()]  
-  )
+# Evaluate the Keras model.
+def evaluate(model_json_config, server_state, federated_test_data):
+
+  #keras_model.compile(
+  #  loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+  #  metrics=[tf.keras.metrics.SparseCategoricalAccuracy()]  
+  #)
   
-  keras_model.set_weights(server_state)
-  keras_model.evaluate(central_emnist_test)
+  #keras_model.evaluate(federated_test_data)
+
+  input_spec = federated_test_data[0].element_spec
+  
+  def tf_model_fn():
+
+    keras_model = create_keras_model(model_json_config)
+
+    tf_model = tff.learning.from_keras_model(
+      keras_model,
+      input_spec=input_spec,
+      loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+      metrics=[tf.keras.metrics.SparseCategoricalAccuracy()]
+    )
+
+    server_state.model.assign_weights_to(tf_model)
+
+    return tf_model
+  
+  federated_evaluation = tff.learning.build_federated_evaluation(tf_model_fn)
+  
+  model = model_fn(MODEL_JSON_CONFIG, LOSS_FUNCTION, METRIC_FUNCTION)
+  test_metrics = federated_evaluation(server_state.model, federated_test_data)
+  print(test_metrics)
+  
 
 # 
 #  TFF initialization
@@ -169,6 +199,28 @@ def client_update_fn(tf_dataset, server_weights):
   client_optimizer = getattr(tf.keras.optimizers, OPTIMIZER)(learning_rate=0.01)
   return client_update(model, tf_dataset, server_weights, client_optimizer)
 
+@tff.tf_computation(tf.int32)
+def make_training_data(client_job_id):
+  print('Making training data on client.')
+  central_emnist_train = emnist_test.create_tf_dataset_from_all_clients().take(1000)
+  central_emnist_train = preprocess(central_emnist_train, BATCH_SIZE)
+  return central_emnist_train
+
+@tff.federated_computation(tff.FederatedType(tf.int32, tff.CLIENTS))
+def make_training_data_on_clients(client_job_ids):
+  return tff.federated_map(make_training_data, client_job_ids)
+
+@tff.tf_computation(tf.int32)
+def make_testing_data(client_job_id):
+  print('Making testing data on client.')
+  central_emnist_test = emnist_test.create_tf_dataset_from_all_clients().take(1000)
+  central_emnist_test = preprocess(central_emnist_test, BATCH_SIZE)
+  return central_emnist_test
+
+@tff.federated_computation(tff.FederatedType(tf.int32, tff.CLIENTS))
+def make_testing_data_on_clients(client_job_ids):
+  return tff.federated_map(make_testing_data, client_job_ids)
+
 # 
 #  TFF federated computation definition.
 # 
@@ -194,29 +246,32 @@ def next_fn(server_weights, federated_dataset):
 
   return server_weights
 
-# 
-#  Get and preprocess testing data.
-# 
-central_emnist_test = emnist_test.create_tf_dataset_from_all_clients().take(1000)
-central_emnist_test = preprocess(central_emnist_test, BATCH_SIZE)
 
 # 
 #  Run the federated computation.
 # 
-federated_algorithm = tff.templates.IterativeProcess(
-    initialize_fn=initialize_fn,
-    next_fn=next_fn
-)
+federated_algorithm = tff.learning.build_federated_averaging_process(
+  model_fn=create_tf_model_fn, client_optimizer_fn=create_optimizer_fn)
+
+#tff.templates.IterativeProcess(
+#    initialize_fn=initialize_fn,
+#    next_fn=next_fn
+#)
 
 print('Initializing algorithm... ')
 server_state = federated_algorithm.initialize()
-evaluate(MODEL_JSON_CONFIG, server_state)
+federated_train_data = make_training_data_on_clients([i + 100000 for i in range(0, NUM_CLIENTS)])
+federated_test_data = make_testing_data_on_clients([i + 200000 for i in range(0, NUM_CLIENTS)])
+
+evaluate(MODEL_JSON_CONFIG, server_state, federated_test_data)
 
 # Federated averaging for 100 rounds
 for round in range(100):
   print(round)
-  server_state = federated_algorithm.next(server_state, federated_train_data)
-  evaluate(MODEL_JSON_CONFIG, server_state)
+  server_state, metrics = federated_algorithm.next(server_state, federated_train_data)
+  print('round, metrics={}'.format(metrics))
+  
+  evaluate(MODEL_JSON_CONFIG, server_state, federated_test_data)
 
 # Do one final evaluation.
-evaluate(MODEL_JSON_CONFIG, server_state)
+#evaluate(MODEL_JSON_CONFIG, server_state, federated_test_data)

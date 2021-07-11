@@ -5,7 +5,7 @@ import logging
 
 if __name__ == "__main__":
 
-    logging.basicConfig(level=logging.DEBUG)
+    #logging.basicConfig(level=logging.DEBUG)
     
     if len(sys.argv) != 2:
        print('Incorrect number of arguments. Invoke as: site_executor.py <port number>')
